@@ -13,6 +13,10 @@ parser = argparse.ArgumentParser(description='Filter cells based on QC metrics')
 parser.add_argument("--input_file", type=Path, required=True, help="Input file")
 parser.add_argument("--output_file", type=Path, required=True, help="Output file with good-quality cells")
 parser.add_argument("--qc_violin_plot", type=Path, help="Path to save violin plot of QC metrics")
+parser.add_argument("--scatter_plot_counts_genes", type=Path, help="Path to save scatter plot of counts vs genes")
+parser.add_argument("--scatter_plot_mito_genes", type=Path, help="Path to save scatter plot of mito genes vs genes")
+parser.add_argument("--scatter_plot_mito_counts", type=Path, help="Path to save scatter plot of mito genes vs counts")
+parser.add_argument("--min_genes", type=int, required=True, help="Minimum number of genes")
 # TODO: Add the scatterplot path from snakemake rule so python can use it while executing the script
 # TODO: Add the parameter from snakemake so python can use it while executing the script
 
@@ -21,6 +25,9 @@ args = parser.parse_args()
 # Create directory for figures if one does not exist
 # NOTE: Unless you save the scatterplot elsewhere, you do not need to repeat for scatterplot
 args.qc_violin_plot.parent.mkdir(parents=True, exist_ok=True)
+args.scatter_plot_counts_genes.parent.mkdir(parents=True, exist_ok=True)
+args.scatter_plot_mito_genes.parent.mkdir(parents=True, exist_ok=True)
+args.scatter_plot_mito_counts.parent.mkdir(parents=True, exist_ok=True)
 
 # Load input data
 adata = sc.read_h5ad(args.input_file)
@@ -43,9 +50,9 @@ adata.obs["n_genes"] = (adata.X > 0).sum(axis=1).A1
 
 # TODO: Edit the min_n_genes so that it uses your snakemake parameter instead of a hardcoded value
 # TODO: Edit the fraction_mito threshold so it filters everything above mean + 2*sd
-min_n_genes = 200
+min_n_genes = args.min_genes
 min_n_counts = 1000
-max_fraction_mito = 0.05
+max_fraction_mito = adata.obs["fraction_mito"].mean() + 2 * adata.obs["fraction_mito"].std()
 
 # # # Filtering
 
@@ -81,4 +88,27 @@ plt.savefig(args.qc_violin_plot)
 
 # TODO: Add scatterplot with seaborn and save to location specified in snakemake rule
 # NOTE: Add the thresholds as horizontal and vertical lines to the plot
+# Scatter plot: counts vs genes
+fig, ax = plt.subplots()
+sns.scatterplot(x=adata.obs["n_genes"], y=adata.obs["n_counts"], ax=ax)
+ax.axhline(min_n_counts, color='r', linestyle='--')
+ax.axvline(min_n_genes, color='r', linestyle='--')
+ax.set_title('Counts vs Genes')
+plt.savefig(args.scatter_plot_counts_genes)
+
+# Scatter plot: mito genes vs genes
+fig, ax = plt.subplots()
+sns.scatterplot(x=adata.obs["n_genes"], y=adata.obs["fraction_mito"], ax=ax)
+ax.axhline(max_fraction_mito, color='r', linestyle='--')
+ax.axvline(min_n_genes, color='r', linestyle='--')
+ax.set_title('Mito Genes vs Genes')
+plt.savefig(args.scatter_plot_mito_genes)
+
+# Scatter plot: mito genes vs counts
+fig, ax = plt.subplots()
+sns.scatterplot(x=adata.obs["n_counts"], y=adata.obs["fraction_mito"], ax=ax)
+ax.axhline(max_fraction_mito, color='r', linestyle='--')
+ax.axvline(min_n_counts, color='r', linestyle='--')
+ax.set_title('Mito Genes vs Counts')
+plt.savefig(args.scatter_plot_mito_counts)
 
